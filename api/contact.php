@@ -6,64 +6,100 @@
   * so existing HTML forms keep working without edits. Actually executed
   * from /api/contact.php.
   *
-  * Requires the "PHP Email Form" library (pro-only), expected at:
-  *   assets/vendor/php-email-form/php-email-form.php
+  * Uses PHPMailer over Zoho SMTP (smtppro.zoho.com:465, SSL).
   */
 
-  // ---------------------------------------------------------------------------
-  // Zoho SMTP credentials (from Vercel Environment Variables)
-  // ---------------------------------------------------------------------------
-  //   SMTP_USERNAME = full Zoho mailbox (e.g. contact@mcg-global.com)
-  //   SMTP_PASSWORD = a Zoho app-specific password (NOT your account password)
+  use PHPMailer\PHPMailer\PHPMailer;
+  use PHPMailer\PHPMailer\Exception;
+
+  // --- Load PHPMailer via Composer's autoloader ------------------------------
+  $autoload = __DIR__ . '/vendor/autoload.php';
+  if ( ! file_exists($autoload) ) {
+    http_response_code(200); // validate.js swallows non-2xx responses
+    echo 'Server misconfiguration: PHPMailer not installed. Run `composer install` in /api.';
+    exit;
+  }
+  require $autoload;
+
+  // --- Config ----------------------------------------------------------------
+  // Zoho SMTP credentials come from Vercel env vars.
   $smtp_username = getenv('SMTP_USERNAME');
   $smtp_password = getenv('SMTP_PASSWORD');
 
-  // Zoho rejects any message whose "From" header does not match the
-  // authenticated mailbox ("Relaying disallowed" / 553). We therefore
-  // ALWAYS send as the SMTP user and keep the visitor's address in
-  // the message body for manual reply.
-  $sending_email_address   = $smtp_username;
-  $sending_name            = $smtp_username;
-
-  // Where the submission should land in the inbox.
+  // Where submissions should land.
   $receiving_email_address = 'contact@mcg-global.com';
 
-  // ---------------------------------------------------------------------------
-  // Load the PHP Email Form library
-  // ---------------------------------------------------------------------------
-  $php_email_form = __DIR__ . '/../assets/vendor/php-email-form/php-email-form.php';
-  if ( file_exists($php_email_form) ) {
-    require( $php_email_form );
-  } else {
-    die( 'Unable to load the "PHP Email Form" Library!' );
+  // --- Collect + sanitize POST fields ----------------------------------------
+  $visitor_name    = trim( (string) ($_POST['name']    ?? '') );
+  $visitor_email   = trim( (string) ($_POST['email']   ?? '') );
+  $visitor_phone   = trim( (string) ($_POST['phone']   ?? '') );
+  $visitor_subject = trim( (string) ($_POST['subject'] ?? '') );
+  $visitor_message = trim( (string) ($_POST['message'] ?? '') );
+
+  // Minimal validation matching the BootstrapMade template expectations.
+  if ( $visitor_name === '' || $visitor_email === '' || $visitor_message === '' ) {
+    echo 'Please fill in all required fields.';
+    exit;
+  }
+  if ( ! filter_var($visitor_email, FILTER_VALIDATE_EMAIL) ) {
+    echo 'Please provide a valid email address.';
+    exit;
+  }
+  if ( ! $smtp_username || ! $smtp_password ) {
+    echo 'Server misconfiguration: SMTP credentials are not set.';
+    exit;
   }
 
-  $contact = new PHP_Email_Form;
-  $contact->ajax = true;
+  // --- Send ------------------------------------------------------------------
+  $mail = new PHPMailer(true);
 
-  $contact->to      = $receiving_email_address;
+  try {
+    // SMTP (Zoho) - SSL on port 465, authentication enabled
+    $mail->isSMTP();
+    $mail->Host       = 'smtppro.zoho.com';
+    $mail->Port       = 465;
+    $mail->SMTPAuth   = true;
+    $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS; // implicit TLS for 465
+    $mail->Username   = $smtp_username;
+    $mail->Password   = $smtp_password;
+    $mail->CharSet    = 'UTF-8';
 
-  // Strictly match the SMTP user to avoid Zoho "Relaying disallowed" errors.
-  $contact->from_email = $sending_email_address;
-  $contact->from_name  = $sending_name;
+    // Zoho requires the From address to equal the authenticated mailbox.
+    // Anything else triggers "Relaying disallowed" / 553. We therefore
+    // ALWAYS send as the SMTP user and preserve the visitor's identity
+    // via Reply-To and inside the message body.
+    $mail->setFrom($smtp_username, $smtp_username);
+    $mail->addAddress($receiving_email_address);
+    $mail->addReplyTo($visitor_email, $visitor_name);
 
-  $contact->subject = isset($_POST['subject']) && $_POST['subject'] !== ''
-    ? $_POST['subject']
-    : 'New contact form submission';
+    $mail->Subject = $visitor_subject !== ''
+      ? $visitor_subject
+      : 'New contact form submission';
 
-  // SMTP (Zoho) - SSL on port 465, authentication enabled
-  $contact->smtp = array(
-    'host'     => 'smtppro.zoho.com',
-    'username' => $smtp_username,
-    'password' => $smtp_password,
-    'port'     => '465'
-  );
+    // Plain-text body with the visitor's real email captured for replies.
+    $lines = [];
+    $lines[] = 'From:    ' . $visitor_name;
+    $lines[] = 'Email:   ' . $visitor_email;
+    if ( $visitor_phone !== '' ) {
+      $lines[] = 'Phone:   ' . $visitor_phone;
+    }
+    if ( $visitor_subject !== '' ) {
+      $lines[] = 'Subject: ' . $visitor_subject;
+    }
+    $lines[] = '';
+    $lines[] = 'Message:';
+    $lines[] = $visitor_message;
 
-  // Message body - include the visitor's real email so you can reply manually.
-  $contact->add_message( $_POST['name'],    'From' );
-  $contact->add_message( $_POST['email'],   'Reply to this address' );
-  isset($_POST['phone']) && $contact->add_message( $_POST['phone'], 'Phone' );
-  $contact->add_message( $_POST['message'], 'Message', 10 );
+    $mail->isHTML(false);
+    $mail->Body = implode("\n", $lines);
 
-  echo $contact->send();
+    $mail->send();
+
+    // BootstrapMade validate.js expects a 200 with body exactly "OK".
+    echo 'OK';
+  } catch ( Exception $e ) {
+    // Return a 200 with a human-readable message so validate.js surfaces it.
+    http_response_code(200);
+    echo 'Unable to send the message. ' . $mail->ErrorInfo;
+  }
 ?>
