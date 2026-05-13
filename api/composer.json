@@ -1,0 +1,13 @@
+{
+  "name": "mcg/api",
+  "description": "Vercel Serverless PHP functions for MCG Global contact / product-request forms",
+  "type": "project",
+  "require": {
+    "php": ">=7.4",
+    "phpmailer/phpmailer": "^6.9"
+  },
+  "config": {
+    "optimize-autoloader": true,
+    "sort-packages": true
+  }
+}
