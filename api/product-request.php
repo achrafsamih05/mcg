@@ -1,31 +1,31 @@
 <?php
   /**
-  * Requires the "PHP Email Form" library
-  * The "PHP Email Form" library is available only in the pro version of the template
-  * Expected at: assets/vendor/php-email-form/php-email-form.php
-  * For more info and help: https://bootstrapmade.com/php-email-form/
+  * Vercel Serverless Function (runtime: vercel-php).
   *
-  * Deployed on Vercel via the `vercel-php` community runtime.
-  * SMTP credentials are pulled from Vercel Environment Variables so nothing
-  * sensitive is committed to the repository.
+  * Publicly reachable at /forms/product-request.php (via the rewrite in
+  * vercel.json) so existing HTML forms keep working without edits.
+  * Actually executed from /api/product-request.php.
+  *
+  * Requires the "PHP Email Form" library (pro-only), expected at:
+  *   assets/vendor/php-email-form/php-email-form.php
   */
 
   // ---------------------------------------------------------------------------
-  // Zoho SMTP configuration
+  // Zoho SMTP credentials (from Vercel Environment Variables)
   // ---------------------------------------------------------------------------
-  // Set these in the Vercel dashboard -> Project -> Settings -> Environment Variables:
-  //   SMTP_USERNAME = the full Zoho mailbox address (e.g. sourcing@mcg-global.com)
-  //   SMTP_PASSWORD = a Zoho app-specific password (NOT your regular account password)
+  //   SMTP_USERNAME = full Zoho mailbox (e.g. sourcing@mcg-global.com)
+  //   SMTP_PASSWORD = a Zoho app-specific password (NOT your account password)
   $smtp_username = getenv('SMTP_USERNAME');
   $smtp_password = getenv('SMTP_PASSWORD');
 
-  // Zoho strictly requires the "From" header to match the authenticated mailbox.
-  // Using anything else (e.g. the visitor's email) will cause Zoho to reject the
-  // message with a 553 / relay-denied error. We therefore send AS the SMTP user
-  // and keep the visitor's address in the message body.
+  // Zoho rejects any message whose "From" header does not match the
+  // authenticated mailbox ("Relaying disallowed" / 553). We therefore
+  // ALWAYS send as the SMTP user and keep the visitor's address in
+  // the message body for manual reply.
   $sending_email_address   = $smtp_username;
+  $sending_name            = $smtp_username;
 
-  // Where product requests should ultimately land.
+  // Where product requests should land in the inbox.
   $receiving_email_address = 'sourcing@mcg-global.com';
 
   // ---------------------------------------------------------------------------
@@ -33,7 +33,7 @@
   // ---------------------------------------------------------------------------
   $php_email_form = __DIR__ . '/../assets/vendor/php-email-form/php-email-form.php';
   if ( file_exists($php_email_form) ) {
-    include( $php_email_form );
+    require( $php_email_form );
   } else {
     die( 'Unable to load the "PHP Email Form" Library!' );
   }
@@ -41,11 +41,13 @@
   $contact = new PHP_Email_Form;
   $contact->ajax = true;
 
-  $contact->to         = $receiving_email_address;
-  // IMPORTANT for Zoho: from_email must equal the SMTP username.
+  $contact->to      = $receiving_email_address;
+
+  // Strictly match the SMTP user to avoid Zoho "Relaying disallowed" errors.
   $contact->from_email = $sending_email_address;
-  $contact->from_name  = isset($_POST['name']) ? $_POST['name'] : 'Website Product Request';
-  $contact->subject    = 'New Product Request - MCG-GLOBAL';
+  $contact->from_name  = $sending_name;
+
+  $contact->subject = 'New Product Request - MCG-GLOBAL';
 
   // SMTP (Zoho) - SSL on port 465, authentication enabled
   $contact->smtp = array(
@@ -55,9 +57,9 @@
     'port'     => '465'
   );
 
-  // Contact fields
-  $contact->add_message( $_POST['name'],    'Name' );
-  $contact->add_message( $_POST['email'],   'Email (reply to this address)' );
+  // Contact fields - include the visitor's real email so you can reply manually.
+  $contact->add_message( $_POST['name'],  'Name' );
+  $contact->add_message( $_POST['email'], 'Reply to this address' );
   isset($_POST['phone'])   && $contact->add_message( $_POST['phone'],   'Phone / WhatsApp' );
   isset($_POST['company']) && $contact->add_message( $_POST['company'], 'Company' );
 

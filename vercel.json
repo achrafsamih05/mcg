@@ -1,12 +1,11 @@
 {
   "functions": {
-    "forms/*.php": {
-      "runtime": "vercel-php@0.7.3",
+    "api/*.php": {
+      "runtime": "vercel-php@0.7.1",
       "includeFiles": "assets/vendor/php-email-form/**"
     }
   },
   "rewrites": [
-    { "source": "/forms/contact.php", "destination": "/forms/contact.php" },
-    { "source": "/forms/product-request.php", "destination": "/forms/product-request.php" }
+    { "source": "/forms/(.*)\\.php", "destination": "/api/$1.php" }
   ]
 }
