@@ -25,7 +25,7 @@
   $smtp_password = getenv('SMTP_PASSWORD');
 
   // Where product requests should land.
-  $receiving_email_address = 'sourcing@mcg-global.com';
+  $receiving_email_address = 'services@mcg-global.site';
 
   // --- Collect + sanitize POST fields ----------------------------------------
   $visitor_name    = trim( (string) ($_POST['name']         ?? '') );
@@ -56,7 +56,7 @@
 
   try {
     $mail->isSMTP();
-    $mail->Host       = 'smtppro.zoho.com';
+    $mail->Host       = 'smtp.zoho.com';
     $mail->Port       = 465;
     $mail->SMTPAuth   = true;
     $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS; // implicit TLS for 465
