@@ -27,7 +27,7 @@
   $smtp_password = getenv('SMTP_PASSWORD');
 
   // Where submissions should land.
-  $receiving_email_address = 'contact@mcg-global.com';
+  $receiving_email_address = 'services@mcg-global.site';
 
   // --- Collect + sanitize POST fields ----------------------------------------
   $visitor_name    = trim( (string) ($_POST['name']    ?? '') );
