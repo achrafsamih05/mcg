@@ -56,7 +56,7 @@
   try {
     // SMTP (Zoho) - SSL on port 465, authentication enabled
     $mail->isSMTP();
-    $mail->Host       = 'smtppro.zoho.com';
+    $mail->Host       = 'smtp.zoho.com';
     $mail->Port       = 465;
     $mail->SMTPAuth   = true;
     $mail->SMTPSecure = PHPMailer::ENCRYPTION_SMTPS; // implicit TLS for 465
